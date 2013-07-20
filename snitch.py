@@ -270,8 +270,8 @@ class Snitch(EternalClient):
             return  # Twisted sucks
         if channel == self.nickname:
             pass
-        elif message.startswith('!'):
-            message = message[1:]
+        elif message.startswith('!%s' % settings.num):
+            message = message[2:]
         else:
             return
 
