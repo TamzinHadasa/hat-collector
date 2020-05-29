@@ -272,7 +272,7 @@ class Snitch(EternalClient):
         if channel == self.nickname:
             pass
         elif message.startswith('!'):
-            message = message[2:]
+            message = message[1:]
         else:
             return
 
