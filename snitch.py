@@ -345,9 +345,9 @@ class Snitch(EternalClient):
             fixed_url = diff['url'].replace(url.netloc, fixed_netloc)
             final_url = fixed_url.replace('http://', 'https://')
             self.msg(rule.channel,
-                     ' '.join(('\x0303%s\x0301' % diff['user'],
-                     			'edited \x0314[[\x0307%s\x0314]]\x0301:' % diff['page'],
-                                '\x0310%s\x0301' %diff['summary'],
+                     ' '.join(('\x0303%s\x0315' % diff['user'],
+                     			'edited \x0314[[\x0307%s\x0314]]\x0315:' % diff['page'],
+                                '\x0310%s\x0315' % diff['summary'],
                                 final_url)))
         else:
             base_url = CHANNEL_URLS.get(rule.wiki.strip('.org'),
