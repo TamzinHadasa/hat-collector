@@ -266,6 +266,7 @@ class Snitch(EternalClient):
             snatch.syncChannels()
 
     def privmsg(self, sender, channel, message):
+        log.msg(message)
         if not sender:
             return  # Twisted sucks
         if channel == self.nickname:
