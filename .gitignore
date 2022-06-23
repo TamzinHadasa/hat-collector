@@ -1,3 +1,5 @@
 settings.py
 snitch.db
 .DS_Store
+.nfs*
+__pycache__*

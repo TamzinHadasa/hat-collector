@@ -1,0 +1,12 @@
+database = '/path/to/directory/snitch.db'
+
+snatch_network = 'irc.wikimedia.org'
+snitch_network = 'irc.libera.chat'
+
+nickserv_password = 'password'
+
+nickname = 'hat_collector'
+
+authorized_users = ( 'wikipedia/user1' )
+
+directory = '/path/to/directory'
