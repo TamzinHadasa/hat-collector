@@ -1,11 +1,11 @@
-#! /usr/bin/env python2.6
-# Public domain; bjweeks, MZMcBride; 2011; Rschen7754, 2013
+#! /usr/bin/env python3.9
+# Public domain; bjweeks, MZMcBride; 2011; Rschen7754, 2013; L235, 2022
 
 import collections
 import re
 import sqlite3
 import sre_constants
-import urlparse
+from urllib.parse import urlparse
 
 from twisted.internet import protocol, reactor, task
 from twisted.python import log
@@ -266,6 +266,7 @@ class Snitch(EternalClient):
             snatch.syncChannels()
 
     def privmsg(self, sender, channel, message):
+        log.msg(message)
         if not sender:
             return  # Twisted sucks
         if channel == self.nickname:
@@ -339,7 +340,7 @@ class Snitch(EternalClient):
         if 'page' in diff:
             if not diff['summary']:
                 diff['summary'] = '[none]'
-            url = urlparse.urlparse(diff['url'])
+            url = urlparse(diff['url'])
             fixed_netloc = CHANNEL_URLS.get(url.netloc.strip('.org'),
                                             url.netloc.strip('.org'))+'.org'
             fixed_url = diff['url'].replace(url.netloc, fixed_netloc)
