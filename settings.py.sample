@@ -1,12 +1,21 @@
-database = '/path/to/directory/snitch.db'
+database = 'snitch.db'
 
-snatch_network = 'irc.wikimedia.org'
-snitch_network = 'irc.libera.chat'
+listen_network = 'irc.wikimedia.org'
+listen_port = 6667
+listen_tls = False
+listen_verify_tls = False
 
-nickserv_password = 'password'
+report_network = 'irc.libera.chat'
+report_port = 6697
+report_tls = True
+report_verify_tls = False
+report_sasl_username = 'username'
+report_sasl_password = 'password'
 
-nickname = 'hat_collector'
+nickname = 'nick'
+fallback_nicknames = ['nick2']
+realname = 'Beep Boop'
 
-authorized_users = ( 'wikipedia/user1' )
+authorized_users = {'PhantomTech'}
 
-directory = '/path/to/directory'
+directory = ''
