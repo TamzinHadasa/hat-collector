@@ -293,13 +293,13 @@ class Snitch(EternalClient):
             self.cursor.execute(
                 'SELECT * FROM rules WHERE channel=?', (channel,))
             rules = [Rule(*row) for row in self.cursor.fetchall()]
-            [self.msg(user, '%s %s %s' % (r.wiki, r.type, r.pattern))
+            [self.msg(user, '%s%s %s %s' % ('IGNORE ' if r.ignore else '', r.wiki, r.type, r.pattern))
                 for r in rules]
         elif action == 'listflood':
             self.cursor.execute(
                 'SELECT * FROM rules WHERE channel=?', (channel,))
             rules = [Rule(*row) for row in self.cursor.fetchall()]
-            [self.msg(channel, '%s %s %s' % (r.wiki, r.type, r.pattern))
+            [self.msg(channel, '%s%s %s %s' % ('IGNORE ' if r.ignore else '', r.wiki, r.type, r.pattern))
                 for r in rules]
         elif action == 'join':
             if hostmask not in settings.authorized_users:
