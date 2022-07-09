@@ -1,11 +1,11 @@
 hat-collector
 =============
-This was forked from https://github.com/rschen7754/irc-bots/commit/9eff72f9b020c3e6d8982d2e68d507c96af95b2a.
-
-IRC bots.
+Forked from [L235/hat-collector](https://github.com/L235/hat-collector/commit/c6930ffc566ec62a90e9e88851ad94a48c2c0156)
 
 Dependencies:
-* Python
-** Twisted framework (<https://twistedmatrix.com/>)
+* Python 3.5 - 3.9, limited by pydle
+  * aiosseclient (<https://github.com/ebraminio/aiosseclient>)
+  * pydle (<https://github.com/Shizmob/pydle>)
+  * pure-sasl (<https://github.com/thobbs/pure-sasl>) for SASL authentication
 
 License information is available in the LICENSE file.

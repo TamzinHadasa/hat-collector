@@ -1,67 +1,47 @@
 #! /usr/bin/env python3.9
 # GPL-2.0; bjweeks, MZMcBride; 2011; Rschen7754, 2013; L235, PhantomTech 2022
+import asyncio
 import collections
+import json
 import logging
 import re
 import sqlite3
 import sre_constants
-from typing import Set, Dict, Tuple, List
+from typing import Dict, Tuple, List
 from urllib.parse import urlparse
 
+from aiosseclient import aiosseclient
 import pydle
 
 import settings
 
-COLOR_RE = re.compile(r'\x02|\x03(?:\d{1,2}(?:,\d{1,2})?)?')
-
-CHANNEL_URLS: Dict[str, str] = {'wikidata.wikipedia': 'www.wikidata',
-                                'mediawiki.wikipedia': 'www.mediawiki',
-                                'species.wikipedia': 'species.wikimedia',
-                                'donate.wikimedia.org': 'donate.wikimedia',
-                                'outreach.wikipedia': 'outreach.wikimedia',
-                                'wikimania2013wiki': 'wikimania2013.wikimedia',
-                                'wikimania2014wiki': 'wikimania2014.wikimedia',
-                                'wikimediafoundation.org': 'wikimediafoundation',
-                                }
-
-ACTION_RE = re.compile(r'\[\[(.+)]] (?P<log>.+) {2}\* (?P<user>.+) \* {2}(?P<summary>.+)')
-
-DIFF_RE = re.compile(r'''
-    \[\[(?P<page>.*)]]\          # page title
-    (?P<patrolled>!)?            # patrolled
-    (?P<new>N)?                  # new page
-    (?P<minor>M)?                # minor edit
-    (?P<bot>B)?\                 # bot edit
-    (?P<url>.*)\                 # diff url
-    \*\ (?P<user>.*?)\ \*\       # user
-    \((?P<diff>[+-]\d*)\)\       # diff size
-    ?(?P<summary>.*)             # edit summary
-''', re.VERBOSE)
+CHANNEL_URLS: Dict[str, str] = {
+    'wikidata.wikipedia': 'www.wikidata',
+    'mediawiki.wikipedia': 'www.mediawiki',
+    'species.wikipedia': 'species.wikimedia',
+    'donate.wikimedia.org': 'donate.wikimedia',
+    'outreach.wikipedia': 'outreach.wikimedia',
+    'wikimania2013wiki': 'wikimania2013.wikimedia',
+    'wikimania2014wiki': 'wikimania2014.wikimedia',
+    'wikimediafoundation.org': 'wikimediafoundation',
+}
 
 Rule = collections.namedtuple('Rule', 'wiki, type, pattern, channel, ignore')
 
-BotClient = pydle.featurize(pydle.features.RFC1459Support,
-                            pydle.features.TLSSupport,
-                            pydle.features.IRCv3_1Support,
-                            pydle.features.ISUPPORTSupport, )
+BotClient = pydle.featurize(
+    pydle.features.RFC1459Support,
+    pydle.features.TLSSupport,
+    pydle.features.IRCv3_1Support,
+    pydle.features.ISUPPORTSupport
+)
 
 
-def strip_formatting(message: str) -> str:
-    """Strips colors and formatting from IRC messages"""
-    return COLOR_RE.sub('', message)
+class ReportBot(BotClient):
+    rule_list = set()
 
-
-class ListenReportBot(BotClient):
     def __init__(self, nickname, sqlite_connection: sqlite3.Connection = None, *args, **kwargs):
         super().__init__(nickname, *args, **kwargs)
-        self.other_group: Set[ListenReportBot] = set()
         self.sqlite_connection: sqlite3.Connection = sqlite_connection
-
-    def set_other_group(self, other_group: Set['ListenReportBot']) -> None:
-        """
-        :param other_group: set containing all instances of the ListenBot ReportBot group that are not the same type
-        """
-        self.other_group: Set[ListenReportBot] = other_group
 
     def query(self, query: str, params: dict = None) -> List[Tuple]:
         """
@@ -78,39 +58,29 @@ class ListenReportBot(BotClient):
         self.sqlite_connection.commit()
         return result
 
-    async def update_channels(self, query: str = None) -> None:
-        """ Update list of channels bot should be in
-
-        :param query: SQL query that returns a list of channels, should be automatically determined and not needed
+    async def sync_channels(self) -> None:
+        """ Syncs list of channels bot should be in
         """
-        if isinstance(self, ReportBot):
-            logging.info('Syncing report channels')
-            query = 'SELECT name FROM channels'
-        elif isinstance(self, ListenBot):
-            logging.info('Syncing listener channels')
-            query = 'SELECT "#" || wiki FROM rules'
-        else:
-            logging.error('Attempted to update channels for unknown type')
+        logging.info('Syncing report channels')
+        query = 'SELECT name FROM channels'
         channels = set(f'{row[0]}' for row in self.query(query))
         [await self.join(channel) for channel in (channels - self.channels.keys())]
         [await self.part(channel) for channel in (self.channels.keys() - channels)]
-        if isinstance(self, ListenBot):
-            self.update_rule_list()
 
-    async def update_other_group(self) -> None:
-        """ Updates channels for all bots in the other group
+    def sync_rules(self) -> None:
+        """ Syncs list of channels bot should be in
         """
-        for bot in self.other_group:
-            await bot.update_channels()
+        logging.info('Syncing rules')
+        query = 'SELECT wiki, type, pattern, channel, ignore FROM rules'
+        self.rule_list = set(Rule(*row) for row in self.query(query))
 
     async def on_connect(self) -> None:
         """ Called when bot connects to irc server
         """
         await super().on_connect()
-        await self.update_channels()
+        await self.sync_channels()
+        self.sync_rules()
 
-
-class ReportBot(ListenReportBot):
     async def get_auth_level(self, source: str) -> int:
         """ Gets authorization level of a user.
 
@@ -136,7 +106,8 @@ class ReportBot(ListenReportBot):
         auth_level = await self.get_auth_level(source)
         return auth_level != -1 and auth_level <= req_level
 
-    async def update_rules(self, channel: str, command: List[str], ignore=False, remove=False) -> str:
+    async def update_rules(self, channel: str, command: List[str], ignore=False,
+                           remove=False) -> str:
         """ Update rules
 
         :param channel: channel the rule forwards to
@@ -168,15 +139,19 @@ class ReportBot(ListenReportBot):
 
         exists = len(
             self.query('SELECT * FROM rules '
-                       'WHERE wiki=:wiki AND type=:type AND pattern=:pattern AND channel=:channel AND ignore=:ignore',
-                       {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel, 'ignore': ignore})) > 0
+                       'WHERE wiki=:wiki AND type=:type AND pattern=:pattern '
+                       'AND channel=:channel AND ignore=:ignore',
+                       {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel,
+                        'ignore': ignore})) > 0
         if remove:
             if exists:
                 self.query(
                     'DELETE FROM rules '
-                    'WHERE wiki=:wiki AND type=:type AND pattern=:pattern AND channel=:channel AND ignore=:ignore',
-                    {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel, 'ignore': ignore})
-                await self.update_other_group()
+                    'WHERE wiki=:wiki AND type=:type AND pattern=:pattern '
+                    'AND channel=:channel AND ignore=:ignore',
+                    {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel,
+                     'ignore': ignore})
+                self.sync_rules()
                 return 'Rule deleted'
             else:
                 return 'No such rule'
@@ -184,9 +159,11 @@ class ReportBot(ListenReportBot):
             if exists:
                 return 'Rule already exists'
             else:
-                self.query('INSERT OR REPLACE INTO rules VALUES (:wiki,:type,:pattern,:channel,:ignore)',
-                           {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel, 'ignore': ignore})
-                await self.update_other_group()
+                self.query(
+                    'INSERT OR REPLACE INTO rules VALUES (:wiki,:type,:pattern,:channel,:ignore)',
+                    {'wiki': wiki, 'type': rule_type, 'pattern': pattern, 'channel': channel,
+                     'ignore': ignore})
+                self.sync_rules()
                 return 'Rule added'
 
     async def relay_message(self, channel: str, wiki: str, diff: Dict[str, str]) -> None:
@@ -197,8 +174,10 @@ class ReportBot(ListenReportBot):
         :param diff: diff that matched the rule
         """
         if not self.in_channel(channel):
-            logging.error('Tried to send a message to a channel bot isn\'t in')
-            return
+            await asyncio.sleep(2)  # Give bot chance to (re)connect
+            if not self.in_channel(channel):
+                logging.error('Tried to send a message to a channel bot isn\'t in')
+                return
         if 'page' in diff:
             if not diff['summary']:
                 diff['summary'] = '[no summary]'
@@ -221,10 +200,26 @@ class ReportBot(ListenReportBot):
                                f'\x0310{diff["summary"]}\x0315 '
                                f'https://{base_url}.org/wiki/Special:Log/{diff["log"]}')
 
+    async def list_rules(self, message_target: str, for_channel: str) -> None:
+        """ Lists a channels rules
+
+        :param message_target: target to send rules to
+        :param for_channel: channel to get rule list for
+        """
+        rules = [Rule(*row) for row in
+                 self.query('SELECT * FROM rules WHERE channel=:channel '
+                            'ORDER BY wiki, ignore DESC, type',
+                            {'channel': for_channel})]
+        await self.message(message_target, f'Rules for {for_channel}')
+        [await self.message(message_target,
+                            f'{r.wiki} {"IGNORE " if r.ignore else ""}{r.type} {r.pattern}')
+         for r in rules]
+
     async def process_command(self, message_target: str, sender: str, message: str) -> None:
         """ Process bot command
 
-        This method filters out messages that aren't commands so all messages received can be sent to it
+        This method filters out messages that aren't commands so all messages
+        received can be sent to it
 
         :param message_target: channel/user where the message was sent to
         :param sender: nick that sent the message
@@ -261,44 +256,44 @@ class ReportBot(ListenReportBot):
                 await self.message(conversation, response)
         elif split_message[0] in ('stalk', 'watch', 'match', 'relay'):
             if await self.is_authorized(sender, 0):
-                await self.message(conversation, await self.update_rules(message_target, split_message))
+                await self.message(conversation,
+                                   await self.update_rules(message_target, split_message))
         elif split_message[0] in ('ignore', 'filter'):
             if await self.is_authorized(sender, 0):
-                await self.message(conversation, await self.update_rules(message_target, split_message, ignore=True))
+                await self.message(conversation,
+                                   await self.update_rules(message_target, split_message,
+                                                           ignore=True))
         elif split_message[0] in ('unstalk', 'unwatch', 'unmatch', 'unrelay', 'drop'):
             if await self.is_authorized(sender, 0):
-                await self.message(conversation, await self.update_rules(message_target, split_message, remove=True))
+                await self.message(conversation,
+                                   await self.update_rules(message_target, split_message,
+                                                           remove=True))
         elif split_message[0] in ('unignore', 'dropignore', 'unfilter', 'dropfilter'):
             if await self.is_authorized(sender, 0):
                 await self.message(conversation,
-                                   await self.update_rules(message_target, split_message, ignore=True, remove=True))
+                                   await self.update_rules(message_target, split_message,
+                                                           ignore=True, remove=True))
         elif split_message[0] in ('list', 'ls'):
             if await self.is_authorized(sender, 0):
-                rules = [Rule(*row) for row in self.query('SELECT * FROM rules WHERE channel=:channel',
-                                                          {'channel': message_target})]
-                await self.message(sender, f'Rules for {message_target}')
-                [await self.message(sender, f'{r.wiki} {r.type} {"IGNORE " if r.ignore else ""}{r.pattern}')
-                 for r in rules]
+                await self.list_rules(sender, message_target)
         elif split_message[0] in ('listflood', 'listhere', 'lsflood', 'lshere'):
             if await self.is_authorized(sender, 0):
-                rules = [Rule(*row) for row in self.query('SELECT * FROM rules WHERE channel=:channel',
-                                                          {'channel': message_target})]
-                await self.message(message_target, f'Rules for {message_target}')
-                [await self.message(message_target, f'{r.wiki} {r.type} {"IGNORE " if r.ignore else ""}{r.pattern}')
-                 for r in rules]
+                await self.list_rules(message_target, message_target)
         elif split_message[0] == 'join':
             if await self.is_authorized(sender, 0):
                 if not len(split_message) > 1:
                     await self.message(conversation, '!join (channel)')
                 else:
-                    self.query('INSERT OR IGNORE INTO channels VALUES (:channel)', {'channel': split_message[1]})
+                    self.query('INSERT OR IGNORE INTO channels VALUES (:channel)',
+                               {'channel': split_message[1]})
                     await self.join(split_message[1])
         elif split_message[0] in ('part', 'leave'):
             if await self.is_authorized(sender, 0):
                 if not len(split_message) > 1:
                     await self.message(conversation, '!part (channel)')
                 else:
-                    self.query('DELETE FROM channels WHERE name=:channel', {'channel': split_message[1]})
+                    self.query('DELETE FROM channels WHERE name=:channel',
+                               {'channel': split_message[1]})
                     await self.part(split_message[1])
         elif split_message[0] == 'help':
             if await self.is_authorized(sender, 0):
@@ -306,8 +301,6 @@ class ReportBot(ListenReportBot):
                                    '!(relay|drop|ignore|unignore|list|listflood|join|part|quit)')
         elif split_message[0] == 'quit':
             if await self.is_authorized(sender, 0):
-                for bot in self.other_group:
-                    await bot.quit()
                 await self.quit()
 
     async def on_message(self, target: str, by: str, message: str) -> None:
@@ -316,32 +309,39 @@ class ReportBot(ListenReportBot):
 
         await self.process_command(target, by, message)
 
+    async def handle_event_stream(self, data: Dict) -> None:
+        """ Called when the bot receives a message from the eventstream
 
-class ListenBot(ListenReportBot):
-    rule_list = []
-
-    def update_rule_list(self) -> None:
-        """ Perform a SQL query to update list of rules
+        :param data: data fom the event stream
         """
-        self.rule_list = [Rule(*row) for row in self.query('SELECT * FROM rules ORDER BY ignore DESC')]
+        if data['$schema'] != '/mediawiki/recentchange/1.0.0':
+            logging.error('Unhandled schema')
 
-    async def on_channel_message(self, target: str, by: str, message: str) -> None:
-        """ Called when a channel the bot is in receives a message
-
-        :param target: the channel
-        :param by: nick of the sender
-        :param message: the message
-        """
-        await super().on_channel_message(target, by, message)
-        wiki = target[1:]
-        cleaned_message = strip_formatting(message)
-        edit_match = DIFF_RE.match(cleaned_message)
-        action_match = ACTION_RE.match(cleaned_message)
-        match = edit_match or action_match
-        if not match:
-            logging.info(f'{repr(cleaned_message)} was not matched')
+        wiki = '.'.join(data['server_name'].split('.')[:-1])
+        if data['type'] not in ('edit', 'new', 'log'):
+            if data['type'] not in ('categorize',):
+                logging.info(f'Unknown type {data["type"]}')
             return
-        diff = match.groupdict()
+        diff = {
+            'url': data['meta']['uri'],
+            'user': data['user'],
+            'summary': data['comment']
+        }
+        if data['type'] == 'log':
+            diff.update({
+                'log': data['log_type'],
+                'summary': data['log_action_comment']
+            })
+        else:
+            diff.update({
+                'page': data['title'],
+                'patrolled': '!' if data.get('patrolled', None) else '',
+                'new': 'N' if not data['revision'].get('old', None) else '',
+                'minor': 'M' if data.get('minor', None) else '',
+                'bot': 'B' if data.get('bot', None) else '',
+                'diff': data['length']['new'] - data['length'].get('old', 0),
+                'url': f"{data['meta']['uri']}?oldid={data['revision']['new']}"
+            })
         rule_list = self.rule_list.copy()
 
         # Begin rule matching
@@ -365,9 +365,9 @@ class ListenBot(ListenReportBot):
                 if 'page' in diff:
                     if not pattern.search(diff['page']):
                         continue
-                '''else:  # Justification unknown
-                    if not pattern.search(diff['summary']):
-                        continue'''
+                else:
+                    # if not pattern.search(diff['summary']): Justification unknown
+                    continue
             elif rule.type == 'log':
                 if 'log' in diff:
                     if not pattern.search(diff['log']):
@@ -379,25 +379,26 @@ class ListenBot(ListenReportBot):
             ignore.add(rule.channel)
             # If the rule is not an ignore rule, relay the diff
             if not rule.ignore:
-                for bot in self.other_group:
-                    assert isinstance(bot, ReportBot)
-                    await bot.relay_message(rule.channel, rule.wiki, diff)
+                await self.relay_message(rule.channel, rule.wiki, diff)
 
-
-class ListenReportPool(pydle.ClientPool):
-    def __init__(self):
-        super().__init__()
-        self.reporters: Set[ReportBot] = set()
-        self.listeners: Set[ListenBot] = set()
-
-    def connect(self, client: (ListenBot, ReportBot), *args, **kwargs) -> None:
-        super().connect(client, *args, **kwargs)
-        if isinstance(client, ListenBot):
-            client.set_other_group(self.reporters)
-            self.listeners.add(client)
-        if isinstance(client, ReportBot):
-            client.set_other_group(self.listeners)
-            self.reporters.add(client)
+    async def monitor_event_stream(self):
+        from aiohttp import ClientPayloadError
+        last_id = None
+        while True:
+            try:
+                async for event in aiosseclient(
+                        'https://stream.wikimedia.org/v2/stream/recentchange', last_id=last_id):
+                    last_id = event.id
+                    if event.event != 'message':
+                        logging.error(f'Unexpected event from stream {event.event}: {event.data}')
+                        return
+                    event_data = json.loads(event.data)
+                    if event_data['$schema'] == '/mediawiki/recentchange/1.0.0':
+                        await self.handle_event_stream(event_data)
+                    else:
+                        logging.error(f'Unexpected schema from stream {event_data["$schema"]}')
+            except ClientPayloadError as e:
+                logging.error(f'A developer has lazily worked around an error: {str(e)}')
 
 
 def main():
@@ -405,8 +406,11 @@ def main():
 
     logging.info('Connecting to DB')
     with sqlite3.connect(settings.database) as sqlite_con:
-        sqlite_tables = set(r[0] for r in sqlite_con.execute('SELECT DISTINCT tbl_name FROM sqlite_master;').fetchall())
+        sqlite_tables = \
+            set(r[0] for r
+                in sqlite_con.execute('SELECT DISTINCT tbl_name FROM sqlite_master;').fetchall())
         if 'rules' not in sqlite_tables:
+            logging.info('Creating DB table rules')
             sqlite_con.execute('CREATE TABLE rules ('
                                'wiki text, '
                                'type text, '
@@ -416,31 +420,27 @@ def main():
                                'UNIQUE(wiki, type, pattern, channel, ignore));')
             sqlite_con.commit()
         if 'channels' not in sqlite_tables:
+            logging.info('Creating DB table channels')
             sqlite_con.execute('CREATE TABLE channels(name text, UNIQUE(name));')
             sqlite_con.commit()
 
-        logging.info('Starting clients')
-        pool = ListenReportPool()
-        pool.connect(ListenBot(settings.nickname,
-                               fallback_nicknames=settings.fallback_nicknames,
-                               realname=settings.realname,
-                               sqlite_connection=sqlite_con),
-                     hostname=settings.listen_network,
-                     port=settings.listen_port,
-                     tls=settings.listen_tls,
-                     tls_verify=settings.listen_verify_tls)
-        pool.connect(ReportBot(settings.nickname,
-                               fallback_nicknames=settings.fallback_nicknames,
-                               realname=settings.realname,
-                               sasl_username=settings.report_sasl_username,
-                               sasl_password=settings.report_sasl_password,
-                               sqlite_connection=sqlite_con),
-                     hostname=settings.report_network,
-                     port=settings.report_port,
-                     tls=settings.report_tls,
-                     tls_verify=settings.report_verify_tls)
-        pool.handle_forever()
-        logging.info('Clients running')
+        logging.info('Starting bot')
+        loop = asyncio.get_event_loop()
+        bot = ReportBot(settings.nickname,
+                        fallback_nicknames=settings.fallback_nicknames,
+                        realname=settings.realname,
+                        sasl_username=settings.report_sasl_username,
+                        sasl_password=settings.report_sasl_password,
+                        sqlite_connection=sqlite_con,
+                        eventloop=loop)
+        bot = asyncio.gather(
+            bot.connect(hostname=settings.report_network,
+                        port=settings.report_port,
+                        tls=settings.report_tls,
+                        tls_verify=settings.report_verify_tls),
+            bot.monitor_event_stream())
+        loop.run_until_complete(bot)
+        logging.info('Running')
 
 
 if __name__ == '__main__':
