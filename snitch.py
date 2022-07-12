@@ -90,7 +90,7 @@ class ReportBot(BotClient):
         """
         auth_level = -1
         info = await self.whois(source)
-        if info['identified'] and info['account'] in settings.authorized_users:
+        if info['identified'] and info['hostname'] in settings.authorized_users:
             auth_level = 0
         return auth_level
 

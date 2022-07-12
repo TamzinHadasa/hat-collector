@@ -11,4 +11,4 @@ nickname = 'nick'
 fallback_nicknames = ['nick2']
 realname = 'Beep Boop'
 
-authorized_users = {'PhantomTech'}
+authorized_users = {'user/PhantomTech'}
