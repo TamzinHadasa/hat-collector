@@ -1,10 +1,5 @@
 database = 'snitch.db'
 
-listen_network = 'irc.wikimedia.org'
-listen_port = 6667
-listen_tls = False
-listen_verify_tls = False
-
 report_network = 'irc.libera.chat'
 report_port = 6697
 report_tls = True
@@ -17,5 +12,3 @@ fallback_nicknames = ['nick2']
 realname = 'Beep Boop'
 
 authorized_users = {'PhantomTech'}
-
-directory = ''
