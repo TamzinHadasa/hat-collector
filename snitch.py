@@ -44,7 +44,8 @@ class ReportBot(BotClient):
         self.sqlite_connection: sqlite3.Connection = sqlite_connection
 
     def query(self, query: str, params: dict = None) -> List[Tuple]:
-        """
+        """ Query database
+
         :param query: SQL query to run with user input in the form :name
         :param params: Optional dict of parameters in form {'name': value}
         :return: results of the query
@@ -68,7 +69,7 @@ class ReportBot(BotClient):
         [await self.part(channel) for channel in (self.channels.keys() - channels)]
 
     def sync_rules(self) -> None:
-        """ Syncs list of channels bot should be in
+        """ Syncs list of rules for the bot
         """
         logging.info('Syncing rules')
         query = 'SELECT wiki, type, pattern, channel, ignore FROM rules'
@@ -108,7 +109,7 @@ class ReportBot(BotClient):
 
     async def update_rules(self, channel: str, command: List[str], ignore=False,
                            remove=False) -> str:
-        """ Update rules
+        """ Adds or removes a rule
 
         :param channel: channel the rule forwards to
         :param command: the command given by the user, as a list split on spaces
@@ -295,10 +296,20 @@ class ReportBot(BotClient):
         elif split_message[0] == 'quit':
             if await self.is_authorized(sender, 0):
                 await self.quit()
+                self.eventloop.stop()
 
     async def on_message(self, target: str, by: str, message: str) -> None:
+        """ Called when the bot sees a message
+
+        Message include messages sent in channels that the bot is in
+        and message sent directly to the bot
+
+        :param target: message recipient, a nick or channel name
+        :param by: message sender
+        :param message: the message
+        """
         await super().on_channel_message(target, by, message)
-        logging.info(f'{by} -> {target}: {message}')
+        # logging.info(f'{by} -> {target}: {message}')
 
         await self.process_command(target, by, message)
 
@@ -368,13 +379,18 @@ class ReportBot(BotClient):
                 else:
                     continue
             # Rule should be applied
-            # Don't relay a diff for each rule match
+
+            # Ignore rules are processed first so a match of any rule means
+            # that the bot knows how to handle this event for the matched
+            # rule's channel
             ignore.add(rule.channel)
-            # If the rule is not an ignore rule, relay the diff
+            # If the rule is not an ignore rule, relay the event
             if not rule.ignore:
                 await self.relay_message(rule.channel, rule.wiki, diff)
 
-    async def monitor_event_stream(self):
+    async def monitor_event_stream(self) -> None:
+        """ Gets and relays events to the bot
+        """
         from aiohttp import ClientPayloadError
         last_id = None
         while True:
@@ -417,7 +433,7 @@ def main():
             sqlite_con.execute('CREATE TABLE channels(name text, UNIQUE(name));')
             sqlite_con.commit()
 
-        logging.info('Starting bot')
+        logging.info('Preparing bot')
         loop = asyncio.get_event_loop()
         bot = ReportBot(settings.nickname,
                         fallback_nicknames=settings.fallback_nicknames,
@@ -431,9 +447,17 @@ def main():
                         port=settings.report_port,
                         tls=settings.report_tls,
                         tls_verify=settings.report_verify_tls),
-            bot.monitor_event_stream())
-        loop.run_until_complete(bot)
-        logging.info('Running')
+            bot.monitor_event_stream(),
+            return_exceptions=True)
+        logging.info('Running bot')
+        try:
+            loop.run_until_complete(bot)
+        except RuntimeError as e:  # This is probably the wrong way to make !quit stop the process
+            if str(e) == 'Event loop stopped before Future completed.':
+                pass
+            else:
+                raise e
+        logging.info('Quit')
 
 
 if __name__ == '__main__':
