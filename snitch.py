@@ -37,7 +37,7 @@ BotClient = pydle.featurize(
 
 
 class ReportBot(BotClient):
-    rule_list = set()
+    rule_list = []
 
     def __init__(self, nickname, sqlite_connection: sqlite3.Connection = None, *args, **kwargs):
         super().__init__(nickname, *args, **kwargs)
@@ -72,8 +72,8 @@ class ReportBot(BotClient):
         """ Syncs list of rules for the bot
         """
         logging.info('Syncing rules')
-        query = 'SELECT wiki, type, pattern, channel, ignore FROM rules'
-        self.rule_list = set(Rule(*row) for row in self.query(query))
+        query = 'SELECT wiki, type, pattern, channel, ignore FROM rules ORDER BY ignore DESC'
+        self.rule_list = [Rule(*row) for row in self.query(query)]
 
     async def on_connect(self) -> None:
         """ Called when bot connects to irc server
