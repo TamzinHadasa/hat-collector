@@ -388,6 +388,16 @@ class ReportBot(BotClient):
             if not rule.ignore:
                 await self.relay_message(rule.channel, rule.wiki, diff)
 
+    async def on_data_error(self, exception):
+        """ Handle errors
+        """
+        await super().on_data_error(exception)
+        # Proper anti-flooding measures are required however this may
+        # need to be done in pydle
+        if 'Excess Flood' in str(exception):
+            logging.error(f'Handling flood disconnection: {exception}')
+            await self.connect(reconnect=True)
+
     async def monitor_event_stream(self) -> None:
         """ Gets and relays events to the bot
         """
