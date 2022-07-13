@@ -3,3 +3,5 @@ snitch.db
 .DS_Store
 .nfs*
 __pycache__*
+old
+Pipfile*
