@@ -255,30 +255,24 @@ class ReportBot(BotClient):
                 response.strip('\n')
                 await self.message(conversation, response)
         elif split_message[0] in ('stalk', 'watch', 'match', 'relay'):
-            if await self.is_authorized(sender, 0):
-                await self.message(conversation,
-                                   await self.update_rules(message_target, split_message))
+            await self.message(conversation,
+                               await self.update_rules(message_target, split_message))
         elif split_message[0] in ('ignore', 'filter'):
-            if await self.is_authorized(sender, 0):
-                await self.message(conversation,
-                                   await self.update_rules(message_target, split_message,
-                                                           ignore=True))
+            await self.message(conversation,
+                               await self.update_rules(message_target, split_message,
+                                                       ignore=True))
         elif split_message[0] in ('unstalk', 'unwatch', 'unmatch', 'unrelay', 'drop'):
-            if await self.is_authorized(sender, 0):
-                await self.message(conversation,
-                                   await self.update_rules(message_target, split_message,
-                                                           remove=True))
+            await self.message(conversation,
+                               await self.update_rules(message_target, split_message,
+                                                       remove=True))
         elif split_message[0] in ('unignore', 'dropignore', 'unfilter', 'dropfilter'):
-            if await self.is_authorized(sender, 0):
-                await self.message(conversation,
-                                   await self.update_rules(message_target, split_message,
-                                                           ignore=True, remove=True))
+            await self.message(conversation,
+                               await self.update_rules(message_target, split_message,
+                                                       ignore=True, remove=True))
         elif split_message[0] in ('list', 'ls'):
-            if await self.is_authorized(sender, 0):
-                await self.list_rules(sender, message_target)
+            await self.list_rules(sender, message_target)
         elif split_message[0] in ('listflood', 'listhere', 'lsflood', 'lshere'):
-            if await self.is_authorized(sender, 0):
-                await self.list_rules(message_target, message_target)
+            await self.list_rules(message_target, message_target)
         elif split_message[0] == 'join':
             if await self.is_authorized(sender, 0):
                 if not len(split_message) > 1:
@@ -296,9 +290,8 @@ class ReportBot(BotClient):
                                {'channel': split_message[1]})
                     await self.part(split_message[1])
         elif split_message[0] == 'help':
-            if await self.is_authorized(sender, 0):
-                await self.message(message_target,
-                                   '!(relay|drop|ignore|unignore|list|listflood|join|part|quit)')
+            await self.message(message_target,
+                               '!(relay|drop|ignore|unignore|list|listflood|join|part|quit)')
         elif split_message[0] == 'quit':
             if await self.is_authorized(sender, 0):
                 await self.quit()
