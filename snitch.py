@@ -122,12 +122,12 @@ class ReportBot(BotClient):
         if not self.is_channel(channel):
             return f'Command {command[0]} must be executed from within a channel'
         elif len(command) < 3:
-            return f'!{command[0]} wiki (page|user|summary|log|all) [pattern]'
+            return f'!{command[0]} wiki (page|user|summary|log|logsummary|all) [pattern]'
         wiki = command[1]
         rule_type = command[2]
 
-        if rule_type not in ('summary', 'user', 'page', 'log', 'all'):
-            return 'Type must be one of: all, user, summary, page, log'
+        if rule_type not in ('summary', 'user', 'page', 'log', 'logsummary', 'all'):
+            return 'Type must be one of: all, user, summary, page, log, logsummary'
 
         if rule_type == 'all':
             pattern = ''
@@ -377,6 +377,12 @@ class ReportBot(BotClient):
             elif rule.type == 'log':
                 if 'log' in diff:
                     if not pattern.search(diff['log']):
+                        continue
+                else:
+                    continue
+            elif rule.type == 'logsummary':
+                if 'log' in diff:
+                    if not pattern.search(diff['summary']):
                         continue
                 else:
                     continue
