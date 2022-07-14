@@ -16,6 +16,7 @@ import pydle
 
 import settings
 
+ABUSE_LOG_REGEX = re.compile(r'\(\[\[Special:AbuseLog/(\d+)\|details]]\)')
 CHANNEL_URLS: Dict[str, str] = {
     'wikidata.wikipedia': 'www.wikidata',
     'mediawiki.wikipedia': 'www.mediawiki',
@@ -197,11 +198,25 @@ class ReportBot(BotClient):
         else:
             base_url = CHANNEL_URLS.get(wiki.strip('.org'),
                                         wiki.strip('.org'))
-            await self.message(channel,
-                               f'\x0303{diff["user"]}\x0315 '
-                               f'{diff["log"]} '
-                               f'\x0310{diff["summary"]}\x0315 '
-                               f'https://{base_url}.org/wiki/Special:Log/{diff["log"]}')
+            if diff['log'] == 'abusefilter':
+                filter_log = ABUSE_LOG_REGEX.findall(diff['summary'])
+                if len(filter_log) > 0:
+                    filter_log = filter_log[0]
+                else:
+                    filter_log = ''
+                trimmed_summary = \
+                    ABUSE_LOG_REGEX.sub('', ','.join(diff['summary'].split(',')[1:])).strip()
+                await self.message(channel,
+                                   f'\x0303{diff["user"]}\x0315 '
+                                   f'triggered a filter '
+                                   f'\x0310{trimmed_summary}\x0315 '
+                                   f'https://{base_url}.org/wiki/Special:AbuseLog/{filter_log}')
+            else:
+                await self.message(channel,
+                                   f'\x0303{diff["user"]}\x0315 '
+                                   f'{diff["log"]} '
+                                   f'\x0310{diff["summary"]}\x0315 '
+                                   f'https://{base_url}.org/wiki/Special:Log/{diff["log"]}')
 
     async def list_rules(self, message_target: str, for_channel: str) -> None:
         """ Lists a channels rules
