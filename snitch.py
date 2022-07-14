@@ -7,6 +7,7 @@ import logging
 import re
 import sqlite3
 import sre_constants
+import time
 from typing import Dict, Tuple, List
 from urllib.parse import urlparse
 
@@ -38,6 +39,7 @@ BotClient = pydle.featurize(
 
 class ReportBot(BotClient):
     rule_list = []
+    next_message = 0
 
     def __init__(self, nickname, sqlite_connection: sqlite3.Connection = None, *args, **kwargs):
         super().__init__(nickname, *args, **kwargs)
@@ -388,12 +390,23 @@ class ReportBot(BotClient):
             if not rule.ignore:
                 await self.relay_message(rule.channel, rule.wiki, diff)
 
+    async def message(self, target, message):
+        """ Message channel or user.
+        """
+        # TODO: Implement better rate control (by waiting until pydle does)
+        wait_time = self.next_message - time.time_ns()
+        if wait_time > 0:
+            await asyncio.sleep(wait_time / 1e9)
+        self.next_message = time.time_ns() + 0.5e9  # 0.5 seconds
+        await super().message(target, message)
+
     async def on_data_error(self, exception):
         """ Handle errors
         """
         await super().on_data_error(exception)
         # Proper anti-flooding measures are required however this may
         # need to be done in pydle
+        # TODO: Implement better rate control (by waiting until pydle does)
         if 'Excess Flood' in str(exception):
             logging.error(f'Handling flood disconnection: {exception}')
             await self.connect(reconnect=True)
