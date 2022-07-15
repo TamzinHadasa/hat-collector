@@ -401,6 +401,8 @@ class ReportBot(BotClient):
                         continue
                 else:
                     continue
+            else:
+                logging.error(f'Unknown rule type in DB: {rule.type}')
             # Rule should be applied
 
             # Ignore rules are processed first so a match of any rule means
