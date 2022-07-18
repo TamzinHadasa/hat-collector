@@ -177,6 +177,47 @@ class ReportBot(BotClient):
         :param wiki: wiki diff is from
         :param diff: diff that matched the rule
         """
+
+        from pydle.features.rfc1459 import protocol
+        # The 150 below in protocol.MESSAGE_LENGTH_LIMIT - 150 is arbitrary,
+        # several additions to the message are made and counted for length
+        # before sending a message.
+        # See pydle.features.rfc1459.client.message()
+        def build_message(max_len: int = protocol.MESSAGE_LENGTH_LIMIT - 150,
+                          summary_shortened: bool = False) -> str:
+            """ Builds the message to be sent, possibly trimming summary
+
+            Builds the message, if the length is longer than max_len and trimming the
+            summary can make the message shorter than max_len, the summary is trimmed.
+
+            :param max_len: Goal maximum characters in the message
+            :param summary_shortened: True if summary has already been shortened
+            :return: A message less than max_len in length, if it is possible by trimming
+            the summary
+            """
+            if 'page' in diff:
+                message = f'\x0303{diff["user"]}\x0315 ' \
+                          f'{"created" if diff["new"] else "edited"} ' \
+                          f'\x0314[[\x0307{diff["page"]}\x0314]]\x0315: ' \
+                          f'\x0310{diff["summary"]}\x0315{"..." if summary_shortened else ""}' \
+                          f' {final_url}'
+            elif diff['log'] == 'abusefilter':
+                message = f'\x0303{diff["user"]}\x0315 ' \
+                          f'triggered a filter ' \
+                          f'\x0310{trimmed_summary}\x0315{"..." if summary_shortened else ""} ' \
+                          f'https://{base_url}.org/wiki/Special:AbuseLog/{filter_log}'
+            else:
+                message = f'\x0303{diff["user"]}\x0315 ' \
+                          f'{diff["log"]} ' \
+                          f'\x0310{diff["summary"]}\x0315{"..." if summary_shortened else ""} ' \
+                          f'https://{base_url}.org/wiki/Special:Log/{diff["log"]}'
+
+            if len(message) > max_len:
+                if len(message) - len(diff['summary']) + 3 < max_len:
+                    diff['summary'] = diff['summary'][:-(len(message) + 3 - max_len)]
+                    return build_message(summary_shortened=True)
+            return message
+
         if not self.in_channel(channel):
             await asyncio.sleep(2)  # Give bot chance to (re)connect
             if not self.in_channel(channel):
@@ -190,11 +231,7 @@ class ReportBot(BotClient):
                                             url.netloc.strip('.org')) + '.org'
             fixed_url = diff['url'].replace(url.netloc, fixed_netloc)
             final_url = fixed_url.replace('http://', 'https://')
-            await self.message(channel,
-                               f'\x0303{diff["user"]}\x0315 '
-                               f'{"created" if diff["new"] else "edited"} '
-                               f'\x0314[[\x0307{diff["page"]}\x0314]]\x0315: '
-                               f'\x0310{diff["summary"]}\x0315 {final_url}')
+            await self.message(channel, build_message())
         else:
             base_url = CHANNEL_URLS.get(wiki.strip('.org'),
                                         wiki.strip('.org'))
@@ -206,17 +243,9 @@ class ReportBot(BotClient):
                     filter_log = ''
                 trimmed_summary = \
                     ABUSE_LOG_REGEX.sub('', ','.join(diff['summary'].split(',')[1:])).strip()
-                await self.message(channel,
-                                   f'\x0303{diff["user"]}\x0315 '
-                                   f'triggered a filter '
-                                   f'\x0310{trimmed_summary}\x0315 '
-                                   f'https://{base_url}.org/wiki/Special:AbuseLog/{filter_log}')
+                await self.message(channel, build_message())
             else:
-                await self.message(channel,
-                                   f'\x0303{diff["user"]}\x0315 '
-                                   f'{diff["log"]} '
-                                   f'\x0310{diff["summary"]}\x0315 '
-                                   f'https://{base_url}.org/wiki/Special:Log/{diff["log"]}')
+                await self.message(channel, build_message())
 
     async def list_rules(self, message_target: str, for_channel: str) -> None:
         """ Lists a channels rules
