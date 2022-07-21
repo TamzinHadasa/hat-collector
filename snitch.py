@@ -343,6 +343,16 @@ class ReportBot(BotClient):
             if await self.is_authorized(sender, 0):
                 await self.quit()
                 self.eventloop.stop()
+        elif split_message[0] == 'listchans':
+            if await self.is_authorized(sender, 0):
+                await self.message(conversation, 
+                                f"Currently in the following channels: {str(list(self.channels.keys()))}")
+        elif split_message[0] == 'announce':
+            if await self.is_authorized(sender, 0):
+                announcement = message[10:]
+                for channel in self.channels.keys():
+                    await self.message(channel, announcement)
+                
 
     async def on_message(self, target: str, by: str, message: str) -> None:
         """ Called when the bot sees a message
