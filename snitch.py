@@ -278,10 +278,14 @@ class ReportBot(BotClient):
         """
         if not message.startswith('!'):
             return
+        
         is_channel_message = self.is_channel(message_target)
         conversation = message_target if is_channel_message else sender
         split_message = message[1:].split(' ')
         auth_level = await self.get_auth_level(sender)
+        
+        if settings.debug_mode:
+            await self.message(settings.home_channel, f"BOT: {sender} used command {message} in {conversation}")
 
         # Begin command matching
         if split_message[0] in ('authlevel', 'authorizationlevel'):
@@ -333,7 +337,7 @@ class ReportBot(BotClient):
                                {'channel': split_message[1]})
                     await self.join(split_message[1])
                     await self.message(settings.home_channel, 
-                                f"BOT: Joining channel {split_message[1]} as requested by {sender}")
+                                f"BOT: Joining channel {split_message[1]} as requested by {sender} in {conversation}")
         elif split_message[0] in ('part', 'leave'):
             if await self.is_authorized(sender, 0):
                 if not len(split_message) > 1:
@@ -343,7 +347,7 @@ class ReportBot(BotClient):
                                {'channel': split_message[1]})
                     await self.part(split_message[1])
                     await self.message(settings.home_channel, 
-                                f"BOT: Parting channel {split_message[1]} as requested by {sender}")
+                                f"BOT: Parting channel {split_message[1]} as requested by {sender} in {conversation}")
         elif split_message[0] == 'help':
             await self.message(message_target,
                                '!(relay|drop|ignore|unignore|list|listflood|join|part|quit)')
@@ -357,9 +361,14 @@ class ReportBot(BotClient):
                                 f"Currently in the following channels: {str(list(self.channels.keys()))}")
         elif split_message[0] == 'announce':
             if await self.is_authorized(sender, 0):
-                announcement = message[10:]
+                announcement = ' '.join(split_message[1:])
                 for channel in self.channels.keys():
                     await self.message(channel, announcement)
+        elif split_message[0] == 'message':
+            if await self.is_authorized(sender, 0):
+                channel = split_message[1]
+                announcement = ' '.join(split_message[2:])
+                await self.message(channel, announcement)
                 
 
     async def on_message(self, target: str, by: str, message: str) -> None:
