@@ -93,9 +93,13 @@ class ReportBot(BotClient):
         correspond to decreasing authorization levels. -1 for no match.
         """
         auth_level = -1
+        authorized_re = f'(?:{ "|".join(settings.authorized_users)})'
+        trusted_re = f'(?:{ "|".join(settings.trusted_users)})'
         info = await self.whois(source)
-        if info['identified'] and info['hostname'] in settings.authorized_users:
+        if info['identified'] and re.fullmatch(authorized_re, info['hostname']):
             auth_level = 0
+        elif info['identified'] and re.fullmatch(trusted_re, info['hostname']):
+            auth_level = 1
         return auth_level
 
     async def is_authorized(self, source: str, req_level: int) -> bool:
@@ -321,13 +325,15 @@ class ReportBot(BotClient):
         elif split_message[0] in ('listflood', 'listhere', 'lsflood', 'lshere'):
             await self.list_rules(message_target, message_target)
         elif split_message[0] == 'join':
-            if await self.is_authorized(sender, 0):
+            if await self.is_authorized(sender, 1):
                 if not len(split_message) > 1:
                     await self.message(conversation, '!join (channel)')
                 else:
                     self.query('INSERT OR IGNORE INTO channels VALUES (:channel)',
                                {'channel': split_message[1]})
                     await self.join(split_message[1])
+                    await self.message(settings.home_channel, 
+                                f"BOT: Joining channel {split_message[1]} as requested by {sender}")
         elif split_message[0] in ('part', 'leave'):
             if await self.is_authorized(sender, 0):
                 if not len(split_message) > 1:
@@ -336,6 +342,8 @@ class ReportBot(BotClient):
                     self.query('DELETE FROM channels WHERE name=:channel',
                                {'channel': split_message[1]})
                     await self.part(split_message[1])
+                    await self.message(settings.home_channel, 
+                                f"BOT: Parting channel {split_message[1]} as requested by {sender}")
         elif split_message[0] == 'help':
             await self.message(message_target,
                                '!(relay|drop|ignore|unignore|list|listflood|join|part|quit)')

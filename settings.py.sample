@@ -12,3 +12,6 @@ fallback_nicknames = ['nick2']
 realname = 'Beep Boop'
 
 authorized_users = {'user/PhantomTech'}
+trusted_users = {'wiki[pm]edia/.*'} # "trusted" here is a lower level of trust than "authorized" 
+
+home_channel = '##hat-collector'
