@@ -221,7 +221,7 @@ class ReportBot(BotClient):
         if not self.in_channel(channel):
             await asyncio.sleep(2)  # Give bot chance to (re)connect
             if not self.in_channel(channel):
-                logging.error('Tried to send a message to a channel bot isn\'t in')
+                logging.error(f'Tried to send a message to a channel bot isn\'t in: {channel}')
                 return
         if 'page' in diff:
             if not diff['summary']:
@@ -461,6 +461,9 @@ class ReportBot(BotClient):
         # TODO: Implement better rate control (by waiting until pydle does)
         if 'Excess Flood' in str(exception):
             logging.error(f'Handling flood disconnection: {exception}')
+            await self.connect(reconnect=True)
+        elif isinstance(exception, ConnectionResetError):
+            logging.error(f'Handling connection reset disconnection: {exception}')
             await self.connect(reconnect=True)
 
     async def monitor_event_stream(self) -> None:
