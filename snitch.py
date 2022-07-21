@@ -390,7 +390,7 @@ class ReportBot(BotClient):
                 'minor': 'M' if data.get('minor', None) else '',
                 'bot': 'B' if data.get('bot', None) else '',
                 'diff': data['length']['new'] - data['length'].get('old', 0),
-                'url': f"{data['meta']['uri']}?oldid={data['revision']['new']}"
+                'url': f"{data['meta']['uri']}?diff={data['revision']['new']}"
             })
         rule_list = self.rule_list.copy()
 
