@@ -1,19 +1,22 @@
-database = 'snitch.db'
+""" Settings file for hat-collector
+"""
 
-report_network = 'irc.libera.chat'
-report_port = 6697
-report_tls = True
-report_verify_tls = False
-report_sasl_username = 'username'
-report_sasl_password = 'password'
+DATABASE = 'snitch.db'
 
-nickname = 'nick'
-fallback_nicknames = ['nick2']
-realname = 'Beep Boop'
+REPORT_NETWORK = 'irc.libera.chat'
+REPORT_PORT = 6697
+REPORT_TLS = True
+REPORT_VERIFY_TLS = False
+REPORT_SASL_USERNAME = 'username'
+REPORT_SASL_PASSWORD = 'password'
 
-authorized_users = {'user/PhantomTech'}
-trusted_users = {'wiki[pm]edia/.*'} # "trusted" here is a lower level of trust than "authorized" 
+NICKNAME = 'nick'
+FALLBACK_NICKNAMES = ['nick2']
+REALNAME = 'Beep Boop'
 
-home_channel = '##hat-collector'
+AUTHORIZED_USERS = {'user/PhantomTech'}
+TRUSTED_USERS = {'wiki[pm]edia/.*'}  # "trusted" here is a lower level of trust than "authorized"
 
-debug_mode = False
+HOME_CHANNEL = '##hat-collector'
+
+DEBUG_MODE = False
