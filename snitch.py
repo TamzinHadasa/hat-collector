@@ -423,7 +423,9 @@ class ReportBot(BotClient):
         if data['type'] == 'log':
             diff.update({
                 'log': data['log_type'],
-                'summary': data['log_action_comment']
+                'summary': (data['log_action_comment']
+                            if data['log_action_comment'] != 'reviewed'
+                            else 'pagetriage-curation')
             })
         else:
             diff.update({
